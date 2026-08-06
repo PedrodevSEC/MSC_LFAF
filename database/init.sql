@@ -1,0 +1,1 @@
+SELECT 'LFAF Database Initialized';

@@ -1,0 +1,100 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===========================
+# Flask
+# ===========================
+instance/
+.flaskenv
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# ===========================
+# Logs
+# ===========================
+*.log
+logs/
+*.pid
+
+# ===========================
+# Cache
+# ===========================
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ===========================
+# Jupyter
+# ===========================
+.ipynb_checkpoints/
+
+# ===========================
+# VS Code / JetBrains
+# ===========================
+.vscode/
+.idea/
+
+# ===========================
+# Sistema Operacional
+# ===========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================
+# Docker
+# ===========================
+docker-compose.override.yml
+*.tar
+
+# Docker volumes locais (caso existam)
+postgres_data/
+mysql_data/
+redis_data/
+mongo_data/
+
+# ===========================
+# Banco de dados
+# ===========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================
+# Arquivos temporários
+# ===========================
+tmp/
+temp/
+.cache/
+
+# ===========================
+# Secrets
+# ===========================
+secrets/
+*.pem
+*.key
+*.crt

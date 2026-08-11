@@ -18,9 +18,8 @@ class Session(db.Model):
         nullable=False
     )
 
-    phobia_id = db.Column(
-        db.Integer,
-        db.ForeignKey("phobias.id"),
+    map_name = db.Column(
+        db.String(150),
         nullable=False
     )
 
@@ -35,19 +34,8 @@ class Session(db.Model):
         nullable=True
     )
 
-    current_section = db.Column(
-        db.Integer,
-        nullable=False,
-        default=1
-    )
-
     user = db.relationship(
         "User",
-        back_populates="sessions"
-    )
-
-    phobia = db.relationship(
-        "Phobia",
         back_populates="sessions"
     )
 
@@ -56,3 +44,7 @@ class Session(db.Model):
         back_populates="session",
         cascade="all, delete-orphan"
     )
+
+    @property
+    def phobia(self):
+        return self.user.phobia

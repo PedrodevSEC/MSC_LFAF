@@ -16,7 +16,7 @@ class Phobia(db.Model):
         unique=True
     )
 
-    sessions = db.relationship(
-        "Session",
+    users = db.relationship(
+        "User",
         back_populates="phobia"
     )

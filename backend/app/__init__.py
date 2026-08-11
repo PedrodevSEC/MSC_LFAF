@@ -27,6 +27,11 @@ def create_app():
         db.create_all()
 
     from routes.health import health_bp
+    from routes.sessions import sessions_bp
+    from routes.heart_rates import heart_rates_bp
+    
     app.register_blueprint(health_bp)
+    app.register_blueprint(sessions_bp)
+    app.register_blueprint(heart_rates_bp)
 
     return app

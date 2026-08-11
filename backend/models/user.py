@@ -20,6 +20,17 @@ class User(db.Model):
         nullable=False
     )
 
+    phobia_id = db.Column(
+        db.Integer,
+        db.ForeignKey("phobias.id"),
+        nullable=False
+    )
+
+    phobia = db.relationship(
+        "Phobia",
+        back_populates="users"
+    )
+
     sessions = db.relationship(
         "Session",
         back_populates="user",

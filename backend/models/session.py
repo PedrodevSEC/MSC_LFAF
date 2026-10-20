@@ -18,6 +18,11 @@ class Session(db.Model):
         nullable=False
     )
 
+    section = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
     map_name = db.Column(
         db.String(150),
         nullable=False
@@ -43,6 +48,22 @@ class Session(db.Model):
         "HeartRate",
         back_populates="session",
         cascade="all, delete-orphan"
+    )
+
+    baseline_bpm = db.Column(
+    db.Float,
+    nullable=True
+    )
+
+    baseline_samples_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    baseline_completed_at = db.Column(
+        db.DateTime,
+        nullable=True
     )
 
     @property

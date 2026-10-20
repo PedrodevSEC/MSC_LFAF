@@ -9,7 +9,6 @@ sessions_bp = Blueprint(
     url_prefix="/sessions"
 )
 
-
 @sessions_bp.route("", methods=["POST"])
 def create_session():
 
@@ -20,32 +19,51 @@ def create_session():
             "error": "Request body is required"
         }), 400
 
-    user_id = data.get("user_id")
-    map_name = data.get("map_name")
+    user_name = data.get("user_name")
 
-    if not user_id or not map_name:
+    if not user_name:
         return jsonify({
-            "error": "user_id and map_name are required"
+            "error": "user_name is required"
         }), 400
 
-    session = SessionService.create_session(
-        user_id=user_id,
-        map_name=map_name
-    )
+    try:
 
-    return jsonify({
-        "id": session.id,
-        "user_id": session.user_id,
-        "map_name": session.map_name,
-        "phobia": session.phobia.name,
-        "started_at": session.started_at.isoformat()
-    }), 201
+        session = SessionService.create_session(
+            user_name=user_name
+        )
 
+        return jsonify({
+            "id": session.id,
+            "user_id": session.user_id,
+            "user_name": session.user.name,
+            "section": session.section,
+            "map_name": session.map_name,
+            "phobia": session.phobia.name,
+            "started_at": session.started_at.isoformat()
+        }), 201
 
-@sessions_bp.route("/<int:session_id>", methods=["GET"])
+    except ValueError as e:
+
+        return jsonify({
+            "error": str(e)
+        }), 404
+
+    except Exception as e:
+
+        return jsonify({
+            "error": "Error creating session",
+            "details": str(e)
+        }), 500
+
+@sessions_bp.route(
+    "/<int:session_id>",
+    methods=["GET"]
+)
 def get_session(session_id):
 
-    session = SessionService.get_session(session_id)
+    session = SessionService.get_session(
+        session_id
+    )
 
     if not session:
         return jsonify({
@@ -55,6 +73,8 @@ def get_session(session_id):
     return jsonify({
         "id": session.id,
         "user_id": session.user_id,
+        "user_name": session.user.name,
+        "section": session.section,
         "map_name": session.map_name,
         "phobia": session.phobia.name,
         "started_at": session.started_at.isoformat(),
@@ -65,14 +85,15 @@ def get_session(session_id):
         )
     })
 
-
 @sessions_bp.route(
     "/<int:session_id>/finish",
     methods=["POST"]
 )
 def finish_session(session_id):
 
-    session = SessionService.get_session(session_id)
+    session = SessionService.get_session(
+        session_id
+    )
 
     if not session:
         return jsonify({
@@ -84,7 +105,9 @@ def finish_session(session_id):
             "error": "Session already finished"
         }), 400
 
-    session = SessionService.finish_session(session)
+    session = SessionService.finish_session(
+        session
+    )
 
     return jsonify({
         "id": session.id,

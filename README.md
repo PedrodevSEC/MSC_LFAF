@@ -233,7 +233,7 @@ Representa uma execução/teste do ambiente de realidade virtual.
 Exemplo:
 
 ```text
-Session #15
+Session #3
 ├── User: 1
 ├── Phobia: Aracnofobia
 ├── Map: spider_room_01
@@ -257,7 +257,7 @@ Armazena as medições fisiológicas coletadas durante uma sessão.
 Cada medição é armazenada individualmente:
 
 ```text
-Session 15
+Session 3
 
 14:30:01 → 82 BPM
 14:30:02 → 83 BPM
@@ -334,7 +334,7 @@ Resposta:
 ```json
 {
   "status": "ok",
-  "session_id": 15,
+  "session_id": 3,
   "received": 5
 }
 ```
@@ -357,7 +357,7 @@ Resposta:
 {
   "status": "ok",
   "project": "LFAF",
-  "version": "0.3",
+  "version": "0.4",
   "database": "connected"
 }
 ```
@@ -388,16 +388,6 @@ Body:
 ```http
 GET /sessions/{session_id}
 ```
-
----
-
-## Enviar frequência cardíaca
-
-```http
-POST /sessions/{session_id}/heart-rate
-```
-
-Recebe um lote de medições.
 
 ---
 

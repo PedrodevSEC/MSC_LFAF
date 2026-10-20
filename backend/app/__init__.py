@@ -22,6 +22,7 @@ def create_app():
     from models.phobia import Phobia
     from models.session import Session
     from models.heart_rate import HeartRate
+    from models.adaptation_decision import AdaptationDecision
 
     with app.app_context():
         db.create_all()

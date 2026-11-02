@@ -1,5 +1,8 @@
-from flask import Blueprint, jsonify, request
+import json
 
+from flask import Blueprint, Response, jsonify, request
+
+from services.realtime_service import session_event_bus
 from services.session_service import SessionService
 
 
@@ -83,6 +86,50 @@ def create_session():
             "error": "Error creating session",
             "details": str(e)
         }), 500
+
+@sessions_bp.route(
+    "/<int:session_id>/events",
+    methods=["GET"]
+)
+def session_events(session_id):
+    """
+    Stream de eventos em tempo real para um jogo ou cliente monitorar
+    adaptações durante a sessão.
+    """
+
+    def generate():
+        queue = session_event_bus.subscribe(session_id)
+
+        try:
+            initial_payload = {
+                "event": "session_connected",
+                "session_id": session_id,
+                "data": {
+                    "status": "connected",
+                    "message": "Conectado ao stream da sessão.",
+                },
+            }
+            yield f"event: session_connected\ndata: {json.dumps(initial_payload)}\n\n"
+
+            while True:
+                message = queue.get()
+                payload = json.dumps(message)
+                yield f"event: {message['event']}\ndata: {payload}\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            session_event_bus.unsubscribe(session_id, queue)
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 @sessions_bp.route(
     "/<int:session_id>",

@@ -8,6 +8,7 @@ from models.adaptation_decision import AdaptationDecision
 from agents.monitoring_agent import MonitoringAgent
 from agents.emotion_agent import EmotionAgent
 from agents.adaptation_agent import AdaptationAgent
+from services.realtime_service import session_event_bus
 
 
 BASELINE_REQUIRED_SAMPLES = 30
@@ -43,7 +44,7 @@ class AgentService:
                 session.baseline_samples_count = sample_count
                 db.session.commit()
 
-                return {
+                response = {
                     "status": "collecting_baseline",
                     "session_id": session.id,
                     "samples_collected": sample_count,
@@ -53,6 +54,14 @@ class AgentService:
                     ),
                     "adaptation": None,
                 }
+
+                session_event_bus.publish(
+                    session.id,
+                    "baseline_status",
+                    response,
+                )
+
+                return response
 
             baseline_values = [
                 record.bpm for record in valid_history
@@ -68,9 +77,7 @@ class AgentService:
 
             db.session.commit()
 
-            # A janela que estabeleceu a referência não produz
-            # uma decisão de adaptação.
-            return {
+            response = {
                 "status": "baseline_established",
                 "session_id": session.id,
                 "baseline_bpm": session.baseline_bpm,
@@ -79,6 +86,14 @@ class AgentService:
                 ),
                 "adaptation": None,
             }
+
+            session_event_bus.publish(
+                session.id,
+                "baseline_established",
+                response,
+            )
+
+            return response
 
         # 2. Analisar o lote atual após estabelecer a referência.
         monitoring_result = self.monitoring_agent.analyze(
@@ -114,8 +129,7 @@ class AgentService:
         else:
             decision_id = None
 
-        # 4. Devolver um resultado serializável pela API.
-        return {
+        response = {
             "status": "processed",
             "session_id": session.id,
             "monitoring": monitoring_result,
@@ -123,3 +137,24 @@ class AgentService:
             "adaptation": adaptation_result,
             "decision_id": decision_id,
         }
+
+        session_event_bus.publish(
+            session.id,
+            "agent_result",
+            response,
+        )
+
+        if adaptation_result["status"] == "decision":
+            session_event_bus.publish(
+                session.id,
+                "intensity_change",
+                {
+                    "action": adaptation_result["action"],
+                    "reason": adaptation_result["reason"],
+                    "activation": emotion_result.get("activation"),
+                    "mean_bpm": monitoring_result.get("mean_bpm"),
+                    "decision_id": decision_id,
+                },
+            )
+
+        return response

@@ -26,7 +26,48 @@ heart_rates_bp = Blueprint(
     methods=["POST"]
 )
 def receive_heart_rate(session_id):
-
+    """
+    ---
+    tags:
+      - Heart Rates
+    summary: Recebe batimentos de uma sessão
+    description: Recebe uma lista de medidas de bpm para a sessão informada e processa com os agentes.
+    consumes:
+      - application/json
+    parameters:
+      - in: path
+        name: session_id
+        type: integer
+        required: true
+        description: Identificador da sessão.
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - measurements
+          properties:
+            measurements:
+              type: array
+              items:
+                type: object
+                required:
+                  - bpm
+                properties:
+                  bpm:
+                    type: number
+                    example: 72.5
+    responses:
+      201:
+        description: Medidas processadas com sucesso.
+      400:
+        description: Payload inválido.
+      404:
+        description: Sessão não encontrada.
+      500:
+        description: Falha ao processar as medições.
+    """
     session = SessionService.get_session(session_id)
 
     if not session:

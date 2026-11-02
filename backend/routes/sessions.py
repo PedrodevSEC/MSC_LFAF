@@ -11,7 +11,36 @@ sessions_bp = Blueprint(
 
 @sessions_bp.route("", methods=["POST"])
 def create_session():
-
+    """
+    ---
+    tags:
+      - Sessions
+    summary: Cria uma nova sessão
+    description: Cria uma nova sessão para um usuário informado.
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - user_name
+          properties:
+            user_name:
+              type: string
+              example: joao
+    responses:
+      201:
+        description: Sessão criada com sucesso.
+      400:
+        description: Body inválido ou user_name ausente.
+      404:
+        description: Usuário ou vínculo não encontrado.
+      500:
+        description: Erro interno ao criar a sessão.
+    """
     data = request.get_json()
 
     if not data:
@@ -60,7 +89,24 @@ def create_session():
     methods=["GET"]
 )
 def get_session(session_id):
-
+    """
+    ---
+    tags:
+      - Sessions
+    summary: Busca uma sessão por ID
+    description: Retorna os detalhes de uma sessão cadastrada.
+    parameters:
+      - in: path
+        name: session_id
+        type: integer
+        required: true
+        description: Identificador da sessão.
+    responses:
+      200:
+        description: Sessão encontrada.
+      404:
+        description: Sessão não encontrada.
+    """
     session = SessionService.get_session(
         session_id
     )
@@ -90,7 +136,26 @@ def get_session(session_id):
     methods=["POST"]
 )
 def finish_session(session_id):
-
+    """
+    ---
+    tags:
+      - Sessions
+    summary: Finaliza uma sessão
+    description: Atualiza a sessão para marcar o fim do atendimento.
+    parameters:
+      - in: path
+        name: session_id
+        type: integer
+        required: true
+        description: Identificador da sessão.
+    responses:
+      200:
+        description: Sessão finalizada com sucesso.
+      400:
+        description: Sessão já finalizada.
+      404:
+        description: Sessão não encontrada.
+    """
     session = SessionService.get_session(
         session_id
     )

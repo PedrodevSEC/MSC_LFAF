@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.extensions import db
 from models.heart_rate import HeartRate
@@ -19,6 +19,8 @@ class HeartRateService:
                 timestamp = datetime.fromisoformat(
                     timestamp.replace("Z", "+00:00")
                 )
+                if timestamp.tzinfo is not None:
+                    timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
             else:
                 timestamp = datetime.utcnow()
 
@@ -32,6 +34,6 @@ class HeartRateService:
 
             heart_rates.append(heart_rate)
 
-        db.session.commit()
+        db.session.flush()
 
         return heart_rates

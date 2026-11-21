@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from flasgger import Swagger
 
 from config.config import Config
+from config.map_profiles import load_map_profiles
 from app.extensions import db
 
 
@@ -16,6 +17,9 @@ def create_app():
     app = Flask(__name__)
 
     app.config.from_object(Config)
+    app.config["MAP_PROFILES"] = load_map_profiles()
+    if app.config["ADAPTATION_WINDOW_SAMPLES"] < 1:
+        raise ValueError("ADAPTATION_WINDOW_SAMPLES must be positive")
     app.config["SWAGGER"] = {
         "title": "LFAF API",
         "uiversion": 3,
@@ -55,6 +59,7 @@ def create_app():
     from models.phobia import Phobia
     from models.session import Session
     from models.heart_rate import HeartRate
+    from models.adaptation_cycle import AdaptationCycle
     from models.adaptation_decision import AdaptationDecision
 
     with app.app_context():

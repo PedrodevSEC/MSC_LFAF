@@ -7,7 +7,7 @@ from models.user import User
 class SessionService:
 
     @staticmethod
-    def create_session(user_name):
+    def create_session(user_name, map_id=None):
 
         user = User.query.filter_by(
             name=user_name
@@ -26,7 +26,7 @@ class SessionService:
         section = previous_sessions + 1
 
         # Mapa correspondente à seção
-        map_name = f"spider_room_{section:02d}"
+        map_name = map_id or f"spider_room_{section:02d}"
 
         session = Session(
             user_id=user.id,
@@ -38,6 +38,10 @@ class SessionService:
         db.session.commit()
 
         return session
+
+    @staticmethod
+    def lock_session(session_id):
+        return Session.query.filter_by(id=session_id).with_for_update().populate_existing().first()
 
     @staticmethod
     def get_session(session_id):

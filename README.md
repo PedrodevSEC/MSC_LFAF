@@ -505,11 +505,15 @@ docker compose down
 
 # Executar o backend
 
-Com o ambiente virtual ativado:
+Na pasta `backend`, com o ambiente virtual ativado:
 
 ```bash
-python run.py
+gunicorn -c gunicorn.conf.py run:app
 ```
+
+O Gunicorn usa um worker com oito threads por padrão. `HOST`, `PORT` e
+`API_THREADS` podem ser definidos no `backend/.env`. Use `python run.py`
+para depuração local com o servidor de desenvolvimento do Flask.
 
 O servidor estará disponível em:
 
@@ -617,19 +621,61 @@ O Redis será utilizado futuramente para comunicação entre componentes e agent
 
 ### Integração com Unity
 
-As decisões produzidas pelos agentes serão posteriormente encaminhadas para o ambiente de realidade virtual:
+O Unity abre `GET /sessions/{session_id}/events` e processa o evento SSE
+`intensity_change`. O JSON tem os campos externos `event`, `session_id` e
+`data`. Leia `data.action` (`reduce_intensity` ou `increase_intensity`) e
+aplique um passo no controlador de intensidade do cenário, uma vez por
+`data.decision_id`. Guarde o ID e o resultado para reenviar a confirmação
+se a conexão cair. O stream reenvia a decisão pendente ao reconectar.
 
-```text
-Physiological Data
-        ↓
-      Agents
-        ↓
-Adaptation Decision
-        ↓
-Environment Gateway
-        ↓
-      Unity VR
+Confirme em `POST /sessions/{session_id}/decisions/{decision_id}/ack` com
+`{"outcome":"applied","applied_intensity":2}`, onde `applied_intensity` é o
+nível efetivo do cenário. Use `"outcome":"at_limit"` se o cenário já estiver
+no limite nessa direção, informando o nível atual. Repetir a mesma
+confirmação preserva a janela em andamento.
+
+Após confirmar, o backend espera `ADAPTATION_WINDOW_SAMPLES` medições
+válidas recebidas depois da confirmação (padrão: 5). Use o campo
+`timestamp` ISO 8601 em UTC no POST de batimentos quando as medições
+puderem chegar com atraso. Sem esse campo, o backend usa a hora de
+recebimento. Uma nova decisão pode repetir a direção anterior. Se houver
+`at_limit`, o backend mantém a intensidade nessa direção até o jogo
+confirmar uma mudança no sentido oposto.
+
+A classificação do agente usa ativação alta para reduzir, baixa para
+aumentar e moderada para manter. Configure `ADAPTATION_ALLOW_INCREASE=false`
+para desativar o aumento automático.
+
+Cada conexão SSE aberta ocupa uma thread. Dimensione `API_THREADS` para
+as conexões simultâneas e reserve threads para receber batimentos e
+confirmações. O worker único mantém o barramento em memória acessível a
+todas as threads. Dentro de cada avaliação, os agentes continuam em
+sequência. O SSE também consulta o banco para recuperar decisões pendentes
+quando o Unity reconecta.
+
+### Perfil do mapa `mapa_arac_tarefas`
+
+Configure `ARAC_TAREFAS_LEVELS` no ambiente do backend como uma lista JSON
+ordenada da menor para a maior intensidade. Cada item define `count`,
+`scale_multiplier` e `minimum_player_distance_m`. Use os valores suportados
+pelo mapa. Exemplo para teste:
+
+```dotenv
+ARAC_TAREFAS_LEVELS='[{"count":1,"scale_multiplier":0.8,"minimum_player_distance_m":3.0},{"count":2,"scale_multiplier":1.0,"minimum_player_distance_m":2.0}]'
+ARAC_TAREFAS_INITIAL_LEVEL=1
 ```
+
+O índice inicial começa em zero e deve corresponder ao estado em que o
+Unity inicia o mapa. Mantenha a lista e a ordem dos níveis durante a sessão.
+Selecione o mapa no `POST /sessions` com
+`{"user_name":"joao","map_id":"mapa_arac_tarefas"}`.
+
+O agente avança ou recua um nível por decisão. Nesse mapa, o Unity deve
+usar `data.command` e `data.parameters` do evento `intensity_change` para
+aplicar os valores absolutos, com transição de dois segundos. Confirme
+`applied` quando o nível solicitado for aplicado e `at_limit` quando o
+jogo permanecer no nível atual. O backend grava o comando antes de
+publicá-lo, para reenviar os mesmos valores se houver reconexão.
 
 ### Eventos e adaptações
 

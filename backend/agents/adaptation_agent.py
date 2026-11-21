@@ -1,11 +1,9 @@
 class AdaptationAgent:
     """
-    Decide se deve manter ou reduzir a intensidade da exposição.
-
-    A versão inicial não aumenta automaticamente a dificuldade.
+    Decide se deve manter, reduzir ou aumentar a intensidade da exposição.
     """
 
-    def decide(self, emotion_result):
+    def decide(self, emotion_result, allow_increase=False):
         if emotion_result["status"] != "ok":
             return {
                 "status": "no_decision",
@@ -20,6 +18,13 @@ class AdaptationAgent:
                 "status": "decision",
                 "action": "reduce_intensity",
                 "reason": "High estimated physiological activation.",
+            }
+
+        if activation == "low" and allow_increase:
+            return {
+                "status": "decision",
+                "action": "increase_intensity",
+                "reason": "Low estimated physiological activation.",
             }
 
         return {

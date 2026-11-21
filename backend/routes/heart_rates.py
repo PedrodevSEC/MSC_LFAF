@@ -68,7 +68,7 @@ def receive_heart_rate(session_id):
       500:
         description: Falha ao processar as medições.
     """
-    session = SessionService.get_session(session_id)
+    session = SessionService.lock_session(session_id)
 
     if not session:
         return jsonify({
@@ -123,10 +123,6 @@ def receive_heart_rate(session_id):
 
         agent_result = agent_service.process_measurements(
             session=session,
-            measurements=[
-                {"bpm": record.bpm}
-                for record in heart_rates
-            ]
         )
 
         return jsonify({

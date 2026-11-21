@@ -1,7 +1,11 @@
 from datetime import datetime
 from statistics import mean
 
+from flask import current_app
+
 from app.extensions import db
+from config.map_profiles import MAPA_ARAC_TAREFAS
+from models.adaptation_cycle import AdaptationCycle, MapAdaptationCommand
 from models.heart_rate import HeartRate
 from models.adaptation_decision import AdaptationDecision
 
@@ -21,7 +25,7 @@ class AgentService:
         self.emotion_agent = EmotionAgent()
         self.adaptation_agent = AdaptationAgent()
 
-    def process_measurements(self, session, measurements):
+    def process_measurements(self, session):
 
         # 1. Estabelecer a referência fisiológica inicial.
         if session.baseline_bpm is None:
@@ -95,66 +99,125 @@ class AgentService:
 
             return response
 
-        # 2. Analisar o lote atual após estabelecer a referência.
-        monitoring_result = self.monitoring_agent.analyze(
-            measurements
-        )
-
-        emotion_result = self.emotion_agent.analyze(
-            monitoring=monitoring_result,
-            baseline_bpm=session.baseline_bpm,
-        )
-
-        adaptation_result = self.adaptation_agent.decide(
-            emotion_result
-        )
-
-        # 3. Persistir somente decisões válidas.
-        if adaptation_result["status"] == "decision":
-
-            decision = AdaptationDecision(
-                session_id=session.id,
-                mean_bpm=monitoring_result["mean_bpm"],
-                baseline_bpm=session.baseline_bpm,
-                activation=emotion_result["activation"],
-                action=adaptation_result["action"],
-                reason=adaptation_result["reason"],
-            )
-
-            db.session.add(decision)
+        cycle = AdaptationCycle.latest(session.id)
+        if cycle and cycle.pending:
             db.session.commit()
+            return {
+                "status": "awaiting_ack",
+                "session_id": session.id,
+                "decision_id": cycle.decision_id,
+                "adaptation": None,
+            }
 
-            decision_id = decision.id
+        samples_required = current_app.config["ADAPTATION_WINDOW_SAMPLES"]
+        query = HeartRate.query.filter(
+            HeartRate.session_id == session.id,
+            HeartRate.bpm.between(30, 220),
+        )
+        if session.baseline_completed_at:
+            query = query.filter(HeartRate.timestamp > session.baseline_completed_at)
+        elif not cycle:
+            query = query.order_by(HeartRate.id).offset(session.baseline_samples_count)
 
-        else:
-            decision_id = None
+        if cycle:
+            query = query.filter(HeartRate.id > cycle.last_sample_id)
+            # Preserve the last command's observation boundary across maintain decisions.
+            if cycle.acknowledged_at:
+                query = query.filter(HeartRate.timestamp > cycle.acknowledged_at)
+
+        samples = query.order_by(HeartRate.id).limit(samples_required).all()
+        if len(samples) < samples_required:
+            db.session.commit()
+            return {
+                "status": "collecting_adaptation_window",
+                "session_id": session.id,
+                "samples_collected": len(samples),
+                "samples_required": samples_required,
+                "adaptation": None,
+            }
+
+        monitoring = self.monitoring_agent.analyze([{"bpm": sample.bpm} for sample in samples])
+        emotion = self.emotion_agent.analyze(monitoring, session.baseline_bpm)
+        adaptation = self.adaptation_agent.decide(
+            emotion, allow_increase=current_app.config["ADAPTATION_ALLOW_INCREASE"]
+        )
+
+        blocked_action = cycle.blocked_action if cycle else None
+        if blocked_action and adaptation["action"] == blocked_action:
+            adaptation = {
+                "status": "decision",
+                "action": "maintain",
+                "reason": "The game reported the intensity limit in this direction.",
+            }
+
+        profile = current_app.config["MAP_PROFILES"].get(session.map_name)
+        next_level = None
+        if profile and adaptation["action"] != "maintain":
+            last_command = MapAdaptationCommand.last_applied(session.id)
+            level = last_command.level if last_command else profile["initial_level"]
+            step = 1 if adaptation["action"] == "increase_intensity" else -1
+            candidate = level + step
+            if 0 <= candidate < len(profile["levels"]):
+                next_level = candidate
+            else:
+                adaptation = {
+                    "status": "decision",
+                    "action": "maintain",
+                    "reason": "The map profile has no level in this direction.",
+                }
+        elif session.map_name == MAPA_ARAC_TAREFAS and not profile:
+            adaptation = {
+                "status": "decision",
+                "action": "maintain",
+                "reason": "The map profile is unavailable.",
+            }
+
+        decision = AdaptationDecision(
+            session_id=session.id,
+            mean_bpm=monitoring["mean_bpm"],
+            baseline_bpm=session.baseline_bpm,
+            activation=emotion["activation"],
+            action=adaptation["action"],
+            reason=adaptation["reason"],
+        )
+        next_cycle = AdaptationCycle(
+            decision=decision,
+            last_sample_id=samples[-1].id,
+            blocked_action=blocked_action,
+        )
+        if decision.action == "maintain":
+            next_cycle.outcome = "maintained"
+            next_cycle.acknowledged_at = cycle.acknowledged_at if cycle else None
+
+        db.session.add(next_cycle)
+        db.session.flush()
+        if next_level is not None:
+            next_cycle.map_command = MapAdaptationCommand(
+                level=next_level,
+                payload={
+                    "command_id": f"decision-{decision.id}",
+                    "session_id": session.id,
+                    "map_id": session.map_name,
+                    "sequence": decision.id,
+                    "command": profile["command"],
+                    "parameters": profile["levels"][next_level],
+                    "transition_seconds": 2,
+                },
+            )
 
         response = {
             "status": "processed",
             "session_id": session.id,
-            "monitoring": monitoring_result,
-            "emotion": emotion_result,
-            "adaptation": adaptation_result,
-            "decision_id": decision_id,
+            "monitoring": monitoring,
+            "emotion": emotion,
+            "adaptation": adaptation,
+            "decision_id": decision.id,
         }
+        command = next_cycle.command_payload() if next_cycle.pending else None
+        db.session.commit()
 
-        session_event_bus.publish(
-            session.id,
-            "agent_result",
-            response,
-        )
-
-        if adaptation_result["status"] == "decision":
-            session_event_bus.publish(
-                session.id,
-                "intensity_change",
-                {
-                    "action": adaptation_result["action"],
-                    "reason": adaptation_result["reason"],
-                    "activation": emotion_result.get("activation"),
-                    "mean_bpm": monitoring_result.get("mean_bpm"),
-                    "decision_id": decision_id,
-                },
-            )
+        session_event_bus.publish(session.id, "agent_result", response)
+        if command:
+            session_event_bus.publish(session.id, "intensity_change", command)
 
         return response

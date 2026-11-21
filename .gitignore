@@ -7,6 +7,11 @@ __pycache__/
 *.so
 
 tests/
+!backend/tests/
+backend/tests/*
+!backend/tests/test_realtime.py
+!backend/tests/test_adaptation_cycle.py
+!backend/tests/test_session_protocol.py
 
 # Virtual environments
 venv/

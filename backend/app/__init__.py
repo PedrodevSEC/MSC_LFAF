@@ -1,3 +1,4 @@
+import json
 import os
 
 from flask import Flask
@@ -18,6 +19,13 @@ def create_app():
 
     app.config.from_object(Config)
     app.config["MAP_PROFILES"] = load_map_profiles()
+    protocol = json.loads(os.getenv("SESSION_MAP_ORDER", "[]"))
+    if not isinstance(protocol, list) or any(
+        not isinstance(map_id, str) or not map_id.strip() or len(map_id) > 150
+        for map_id in protocol
+    ):
+        raise ValueError("SESSION_MAP_ORDER must be a JSON list of map IDs")
+    app.config["SESSION_MAP_ORDER"] = protocol
     if app.config["ADAPTATION_WINDOW_SAMPLES"] < 1:
         raise ValueError("ADAPTATION_WINDOW_SAMPLES must be positive")
     app.config["SWAGGER"] = {
@@ -59,6 +67,7 @@ def create_app():
     from models.phobia import Phobia
     from models.session import Session
     from models.heart_rate import HeartRate
+    from models.game_event import GameEvent
     from models.adaptation_cycle import AdaptationCycle
     from models.adaptation_decision import AdaptationDecision
 
@@ -68,9 +77,11 @@ def create_app():
     from routes.health import health_bp
     from routes.sessions import sessions_bp
     from routes.heart_rates import heart_rates_bp
+    from routes.game_events import game_events_bp
     
     app.register_blueprint(health_bp)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(heart_rates_bp)
+    app.register_blueprint(game_events_bp)
 
     return app

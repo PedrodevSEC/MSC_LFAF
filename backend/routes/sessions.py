@@ -11,7 +11,7 @@ from models.adaptation_cycle import AdaptationCycle
 from models.heart_rate import HeartRate
 
 from services.realtime_service import session_event_bus
-from services.session_service import SessionService
+from services.session_service import SessionService, SessionStartConflict
 
 
 sessions_bp = Blueprint(
@@ -26,8 +26,8 @@ def create_session():
     ---
     tags:
       - Sessions
-    summary: Cria uma nova sessão
-    description: Cria uma nova sessão para um usuário informado.
+    summary: Abre ou retoma uma sessão
+    description: Retoma a sessão ativa ou abre a próxima etapa do protocolo.
     consumes:
       - application/json
     parameters:
@@ -47,6 +47,8 @@ def create_session():
               example: mapa_arac_tarefas
               description: Mapa explícito com perfil configurado no backend.
     responses:
+      200:
+        description: Sessão ativa retomada.
       201:
         description: Sessão criada com sucesso.
       400:
@@ -56,7 +58,7 @@ def create_session():
       500:
         description: Erro interno ao criar a sessão.
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
     if not isinstance(data, dict) or not data:
         return jsonify({
@@ -65,33 +67,43 @@ def create_session():
 
     user_name = data.get("user_name")
 
-    if not user_name:
+    if not isinstance(user_name, str) or not user_name.strip():
         return jsonify({
             "error": "user_name is required"
         }), 400
 
     map_id = data.get("map_id")
     if map_id is not None and (
-        not isinstance(map_id, str) or map_id not in current_app.config["MAP_PROFILES"]
+        not isinstance(map_id, str)
+        or (
+            map_id not in current_app.config["MAP_PROFILES"]
+            and map_id not in current_app.config["SESSION_MAP_ORDER"]
+        )
     ):
         return jsonify({"error": "Map profile is unavailable"}), 400
 
     try:
 
-        session = SessionService.create_session(
+        session, created = SessionService.create_session(
             user_name=user_name,
             map_id=map_id,
+            protocol=current_app.config["SESSION_MAP_ORDER"],
         )
 
         return jsonify({
             "id": session.id,
+            "session_id": session.id,
             "user_id": session.user_id,
             "user_name": session.user.name,
             "section": session.section,
             "map_name": session.map_name,
+            "map_id": session.map_name,
             "phobia": session.phobia.name,
             "started_at": session.started_at.isoformat()
-        }), 201
+        }), 201 if created else 200
+
+    except SessionStartConflict as e:
+        return jsonify({"error": str(e)}), 409
 
     except ValueError as e:
 
@@ -312,8 +324,6 @@ def finish_session(session_id):
     responses:
       200:
         description: Sessão finalizada com sucesso.
-      400:
-        description: Sessão já finalizada.
       404:
         description: Sessão não encontrada.
     """
@@ -326,14 +336,8 @@ def finish_session(session_id):
             "error": "Session not found"
         }), 404
 
-    if session.ended_at is not None:
-        return jsonify({
-            "error": "Session already finished"
-        }), 400
-
-    session = SessionService.finish_session(
-        session
-    )
+    if session.ended_at is None:
+        session = SessionService.finish_session(session)
 
     return jsonify({
         "id": session.id,

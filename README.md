@@ -364,22 +364,38 @@ Resposta:
 
 ---
 
-## Criar sessão
+## Abrir ou retomar sessão
 
-Inicia uma nova execução de um mapa.
+O Flutter envia o nome cadastrado do voluntário.
 
 ```http
 POST /sessions
 ```
 
-Body:
-
 ```json
-{
-  "user_id": 1,
-  "map_name": "spider_room_01"
-}
+{"user_name":"teste_neon"}
 ```
+
+A API retorna HTTP 201 ao criar a sessão e HTTP 200 ao retomar uma sessão
+aberta. A resposta inclui `session_id`, `section` e `map_id`. O Flutter
+e o Unity usam o mesmo `session_id`. O Unity usa `map_id` para carregar o mapa.
+
+Para definir a ordem das etapas, configure no ambiente do backend:
+
+```dotenv
+SESSION_MAP_ORDER='["mapa_arac_tarefas"]'
+```
+
+O valor é uma lista JSON, com um ID de mapa por etapa. No painel do Render,
+cole o JSON sem as aspas simples externas. Acrescente os próximos mapas na
+ordem em que devem ser executados. Com o protocolo configurado, uma etapa
+concluída não é repetida e a API responde HTTP 409 quando o voluntário já
+concluiu a última. Sem a variável, a API mantém a seleção anterior de mapas
+por etapa. Sessões existentes continuam registradas com sua etapa e mapa.
+
+Quando o jogo terminar, o Unity chama `POST /sessions/{id}/finish`. A próxima
+abertura avança uma etapa. Repetir a chamada de encerramento retorna o horário
+já registrado.
 
 ---
 
@@ -677,15 +693,39 @@ aplicar os valores absolutos, com transição de dois segundos. Confirme
 jogo permanecer no nível atual. O backend grava o comando antes de
 publicá-lo, para reenviar os mesmos valores se houver reconexão.
 
-### Eventos e adaptações
+### Eventos do jogo
 
-Também estão previstas futuras entidades para registrar:
+Envie cada evento do Unity para `POST /sessions/{id}/game-events`.
+Esse é o registro para análise. O fluxo de comandos em tempo real continua
+em `GET /sessions/{id}/events`.
 
-* eventos ocorridos no ambiente;
-* mudanças de estado;
-* decisões dos agentes;
-* adaptações realizadas;
-* relação temporal entre estímulos, respostas fisiológicas e adaptações.
+```json
+{
+  "event_id": "0579eb08-873e-482b-af8d-61c49cb1bd9c",
+  "event_type": "spider_entered_view",
+  "occurred_at": "2026-11-21T18:12:34.125Z",
+  "data": {
+    "spider_id": "spider-01",
+    "distance_m": 2.4
+  }
+}
+```
+
+O Unity detecta e nomeia os eventos. Por exemplo, use
+`spider_entered_view` e `spider_exited_view` para entrada e saída do
+campo de visão e `spider_gaze_started` e `spider_gaze_ended` para início
+e fim do olhar. Envie um horário ISO 8601 com fuso, de preferência UTC, e
+gere um ID por ocorrência. Em tentativas de reenvio, preserve ID e conteúdo.
+O backend registra também `received_at`, normaliza os horários para UTC e
+responde HTTP 200 se já tiver gravado o mesmo evento, ou HTTP 201 quando
+criar o registro. Envie os eventos pendentes antes de chamar `/finish`.
+
+Para análise após a sessão, consulte
+`GET /sessions/{id}/game-events?limit=100`. A resposta inclui `events` e
+`next_after_id`. Use esse cursor como `after_id` na próxima consulta até
+receber `null`. A consulta pagina pela ordem de gravação. Use `occurred_at`
+para montar a linha do tempo do jogo, inclusive se algum evento chegou fora
+de ordem. A tabela `game_events` é criada na inicialização do backend.
 
 ---
 
